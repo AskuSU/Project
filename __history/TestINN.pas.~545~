@@ -1,0 +1,602 @@
+unit TestINN;
+
+interface
+
+uses
+  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
+  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, IdBaseComponent,
+  IdComponent, IdTCPConnection, IdTCPClient, IdHTTP, IdAuthentication,
+  ComObj, ActiveX, ShellAPI, System.NetEncoding;
+
+  type
+  TForm1 = class(TForm)
+    Label1: TLabel;
+    INN: TEdit;
+    IdHTTP1: TIdHTTP;
+    Memo1: TMemo;
+    Button1: TButton;
+    Button2: TButton;
+    Button3: TButton;
+    Button4: TButton;
+    Label2: TLabel;
+    Street: TEdit;
+    procedure Button1Click(Sender: TObject);
+    procedure Button2Click(Sender: TObject);
+    procedure INNKeyPress(Sender: TObject; var Key: Char);
+    procedure Button3Click(Sender: TObject);
+    procedure Button4Click(Sender: TObject);
+    procedure StreetKeyPress(Sender: TObject; var Key: Char);
+
+
+
+  private
+    { Private declarations }
+  public
+    { Public declarations }
+  end;
+
+type AddressComp = record
+  Index:integer;
+  StatIndrex:Boolean;
+  Region:string;
+  City:string;
+  StatCity:boolean;
+  Street:string;
+end;
+
+type Employees = record
+  Employee:integer;
+  StatEmployee:Boolean;
+end;
+
+type Company = record
+  Name, Name2:string;
+  Name_long:string;
+  INN:int64;
+  id_:string;
+  KPP:integer;
+  OKPO:int64;
+  OGRN:int64;
+  ADRESS:AddressComp;
+  NumberOfEmployees:Employees;
+end;
+
+
+
+
+
+var
+  Form1: TForm1;
+  strINN, HTMLdata, strStreet:string;
+  Result2, Result_var2:string;
+  kompaniya:Company;
+  MyExcel: oleVariant;
+  i:integer;
+  SpisokKomp:array of Company;
+  spis:array[1..100,1..100] of integer;
+  all_S:integer;
+  vremenno:string;
+
+const
+  StrRUSS:string = 'https://www.rusprofile.ru';
+  StrSearchRUSS:string = 'https://www.rusprofile.ru/search?query=';
+  StrSearchStreet1:string = 'https://www.rusprofile.ru/search?';
+  StrSearchStreet2:string = 'type=ul&inactive=0&query=';
+  ExcelApp = 'Excel.Application';
+
+
+  implementation
+
+{$R *.dfm}
+
+
+//Открытие файла EXCEL----------------------------------
+
+procedure ExcelOpenFile(direction:string);
+var
+   AppLocation:string;
+begin
+   try
+    //проверяем, нет ли запущенного Excel
+    MyExcel := GetActiveOleObject(ExcelApp);
+  except
+    //если нет, то запускаем
+    on EOLESysError do
+      MyExcel := CreateOleObject(ExcelApp);
+  end;
+  GetDir(0,AppLocation); // Возвращает текущий каталог диска
+
+      MyExcel.visible := true;
+      //Открывать Excel на полный экран
+      MyExcel.WindowState := -4137;
+      //не показывать предупреждающие сообщения
+      MyExcel.DisplayAlerts := False;
+      //Открываем рабочую книгу
+      MyExcel.WorkBooks.Open(AppLocation + direction);
+      //Становимся на первый лист
+      MyExcel.WorkSheets[1].Activate;
+end;
+//---------------------------------------------------------
+
+//Запись даных в Excel-------------------------------------
+
+procedure WriteDataToExcel(data:string; i,j:integer);
+//var Cell_1, Cell_2, MyRange: variant;
+begin
+
+  {получаем ссылку на объект Cells, соответствующей ячейке A1}
+//  Cell_1:=MyExcel.ActiveWorkBook.ActiveWorkSheet.Cells[1,1];
+{получаем ссылку на объект Cells, соответствующей ячейке C5}
+//  Cell_2:=MyExcel.ActiveWorkBook.ActiveWorkSheet.Cells[5,3];
+{получаем объект Range размером 3х5}
+//  MyRange:=MyExcel.ActiveWorkBook.ActiveWorkSheet.Range[Cell_1, Cell_2];
+
+
+
+//  MyExcel.ActiveWorkBook.ActiveSheet.Range['A1'].Value:= data;
+  MyExcel.ActiveWorkBook.ActiveSheet.Cells[i,j]:= data;
+
+end;
+
+//---------------------------------------------------------
+
+
+//Закрыть EXcEL -------------------------------------------
+Function StopExcel:boolean;
+begin
+  try
+    if MyExcel.Visible then MyExcel.Visible:=false;
+    MyExcel.Quit;
+    MyExcel:=Unassigned;
+    Result:=True;
+  except
+    Result:=false;
+  end;
+end;
+//---------------------------------------------------------
+
+//Поиск полного имени-----------------------------
+
+function SearchNameFull(data:string):string;
+begin
+  data:= Copy(data,pos('legalName',data),length(data));
+  data:= Copy(data, pos('<strong>',data)+13,length(data));
+  data := Copy(data, 0,pos('</strong>',data)-1);
+  while Copy(data,0,1)=' ' do
+    begin
+      data := Copy(data,2,length(data));
+    end;
+  data:= Copy(data,0,pos(#$A,data)-1);
+
+  while pos('&quot;',data)>0 do
+  data:= Copy(data,0,pos('&quot;',data)-1)+'"'+Copy(data,pos('&quot;',data)+6,length(data));
+  Result := data;
+end;
+
+//------------------------------------------------
+
+//Поиск короткого имени---------------------------
+
+function SearchName(data:string):string;
+begin
+  data := Copy(data,pos('overh1',data),length(data));
+  data := Copy(data, pos('h1 itemprop="name"',data)+19,length(data));
+  data := Copy(data, 0,pos('</h1>',data)-1);
+  while pos('&quot;',data)>0 do
+  data:= Copy(data,0,pos('&quot;',data)-1)+'"'+Copy(data,pos('&quot;',data)+6,length(data));
+  Result := data;
+end;
+
+//------------------------------------------------
+
+//Поиск ОГРН--------------------------------------
+
+function SearchOGRN(data:string):int64;
+begin
+  data := Copy(data,pos('<h2>Реквизиты</h2>',data),length(data));
+  data := Copy(data,pos('"Основной государственный регистрационный номер"',data),length(data));
+  data := Copy(data, pos('<div class="col-tri">',data)+25,length(data));
+  data := Copy(data, 0,pos('</div>',data)-1);
+  while Copy(data,0,1)=' ' do
+    begin
+      data := Copy(data,2,length(data));
+    end;
+  data:= Copy(data,0,pos(#$A,data)-1);
+  Result := StrToInt64(data);
+end;
+
+//------------------------------------------------
+
+//Поиск ОКПО--------------------------------------
+
+function SearchOKPO(data:string):int64;
+begin
+  data := Copy(data,pos('<h3>Сведения Росстата</h3>',data),length(data));
+  data := Copy(data, pos('<div class="col-tri">',data)+25,length(data));
+  data := Copy(data, 0,pos('</div>',data)-1);
+  while Copy(data,0,1)=' ' do
+    begin
+      data := Copy(data,2,length(data));
+    end;
+  data:= Copy(data,0,pos(#$A,data)-1);
+  Result := StrToInt64(data);
+end;
+
+//------------------------------------------------
+
+//Поиск КПП---------------------------------------
+
+function SearchKPP(data:string):integer;
+begin
+  data := Copy(data,pos('<h2>Реквизиты</h2>',data),length(data));
+  data := Copy(data,pos('"Код причины постановки"',data),length(data));
+  data := Copy(data, pos('<div class="col-tri">',data)+25,length(data));
+  data := Copy(data, 0,pos('</div>',data)-1);
+  while Copy(data,0,1)=' ' do
+    begin
+      data := Copy(data,2,length(data));
+    end;
+  data:= Copy(data,0,pos(#$A,data)-1);
+  Result := StrToInt(data);
+end;
+
+//------------------------------------------------
+
+//Поиск ИНН---------------------------------------
+
+function SearchINN(data:string):int64;
+begin
+  data := Copy(data,pos('<h2>Реквизиты</h2>',data),length(data));
+  data := Copy(data,pos('"Индивидуальный номер налогоплательщика"',data),length(data));
+  data := Copy(data, pos('itemprop="taxID"',data)+25,length(data));
+  data := Copy(data, 0,pos('</div>',data)-1);
+  while Copy(data,0,1)=' ' do
+    begin
+      data := Copy(data,2,length(data));
+    end;
+  data:= Copy(data,0,pos(#$A,data)-1);
+  Result := StrToInt64(data);
+end;
+
+//------------------------------------------------
+
+//Поиск Юр. Адреса------------------------------------
+
+function SearchAddress(data:string):AddressComp;
+begin
+  //Индекс
+  if pos('"postalCode">',data)>0 then
+    begin
+      Result.StatIndrex:= true;
+      data := Copy(data,pos('"postalCode"',data)+14,length(data));
+      while Copy(data,0,1)=' ' do
+       begin
+        data := Copy(data,2,length(data));
+       end;
+      Result.Index:= StrToInt(Copy(data, 0,pos('</span>',data)-1));
+    end
+  else
+    begin
+      Result.StatIndrex := false;
+      Result.Index := 0;
+    end;
+  //
+  //Регион
+  data := Copy(data,pos('"addressRegion">',data)+17,length(data));
+  while Copy(data,0,1)=' ' do
+    begin
+      data := Copy(data,2,length(data));
+    end;
+  Result.Region:= Copy(data, 0,pos('</span>',data)-1);
+  //
+  //Город
+  if pos('"addressLocality">',data)>0 then
+    begin
+      Result.StatCity := true;
+      data := Copy(data,pos('"addressLocality">',data)+19,length(data));
+      while Copy(data,0,1)=' ' do
+        begin
+          data := Copy(data,2,length(data));
+        end;
+      Result.City := Copy(data, 0,pos('</span>',data)-1);;
+    end
+      else
+        begin
+          Result.StatCity := false;
+          Result.City := '';
+        end;
+  //
+  //Улица
+  data := Copy(data,pos('"streetAddress">',data)+18,length(data));
+  while Copy(data,0,1)=' ' do
+    begin
+      data := Copy(data,2,length(data));
+    end;
+  data := Copy(data, 0,pos('</span>',data)-1);
+  Result.Street:= data;
+  //
+end;
+
+//------------------------------------------------
+
+//Поиск Числа сотрудников-------------------------
+
+function SearchEmployees(data:string):Employees;
+begin
+  if pos('Среднесп. численность',data)>0 then
+    begin
+      Result.StatEmployee:= true;
+      data := Copy(data,pos('Среднесп. численность',data)+25,length(data));
+      data := Copy(data,pos('"col-sm-10"',data)+14,length(data));
+      while Copy(data,0,1)=' ' do
+       begin
+        data := Copy(data,2,length(data));
+       end;
+      Result.Employee:= StrToInt(Copy(data, 0,pos('сотру',data)-2));
+    end
+  else
+    begin
+      Result.StatEmployee := false;
+      Result.Employee := 0;
+    end;
+end;
+
+//------------------------------------------------
+
+//Количество действующих компаний-----------------
+
+function SearchAmountOperatingKompany(data:string):integer;
+begin
+  data:= Copy(data,pos('<div class="linkmore">',data),length(data));
+  data:= Copy(data, pos('действующие',data)+13,length(data));
+  data := Copy(data, 0,pos(')',data)-1);
+  Result := StrToInt(data);
+end;
+
+//------------------------------------------------
+
+//Количество действующих компаний-----------------
+
+function FindListKompany(data:string):string;
+var konec:integer;
+begin
+  if pos('"paging"',data)>0 then
+   data:= Copy(data,pos('"unitlist"',data),pos('"paging"',data)-pos('"unitlist"',data))
+  else
+    data:= Copy(data,pos('"unitlist"',data),pos('"sidebar"',data)-pos('"unitlist"',data));
+  Result := data;
+end;
+
+//------------------------------------------------
+
+//Заполнение Массива Компаниями-------------------
+
+procedure FillingKompany(all_S:integer);
+var ss,i,j:integer;
+begin
+  ss:= all_S div 100 ;
+  for i := 1 to ss-1 do
+    for j := 1 to 100-1 do
+      begin
+        spis[i,j]:=j;
+      end;
+   if all_S mod 100>0 then
+    begin
+      for j := 1 to all_S mod 100 -1 do
+       spis[i,j]:=j;
+    end;
+end;
+
+//------------------------------------------------
+
+//Заполнение Массива Компаниями-------------------
+
+procedure PullOutCompanyData(var HTMLdataVAR:string; var Status:boolean; var Marker:integer; var Komp:Company);
+begin
+  if pos('<li>',HTMLdataVAR)>0 then
+    begin
+      HTMLdataVAR:= Copy(HTMLdataVAR,pos('<div class="u-frame">',HTMLdataVAR),length(HTMLdataVAR));
+      HTMLdataVAR:= Copy(HTMLdataVAR,pos('<a href="',HTMLdataVAR)+9,length(HTMLdataVAR));
+      Komp.id_:= Copy(HTMLdataVAR,1,pos('"',HTMLdataVAR)-1);
+      HTMLdataVAR:= Copy(HTMLdataVAR,pos('<div class="u-reqline">',HTMLdataVAR)+24,length(HTMLdataVAR));
+      HTMLdataVAR:= Copy(HTMLdataVAR,pos('</span>',HTMLdataVAR)+7,length(HTMLdataVAR));
+      if Copy(HTMLdataVAR,1,pos('</div>',HTMLdataVAR)-1)='' then
+          Komp.OGRN:=0
+        else
+          Komp.OGRN:=StrToInt64(Copy(HTMLdataVAR,1,pos('</div>',HTMLdataVAR)-1));
+      HTMLdataVAR:= Copy(HTMLdataVAR,pos('<div class="u-reqline">',HTMLdataVAR)+24,length(HTMLdataVAR));
+      HTMLdataVAR:= Copy(HTMLdataVAR,pos('</span>',HTMLdataVAR)+7,length(HTMLdataVAR));
+      if Copy(HTMLdataVAR,1,pos('</div>',HTMLdataVAR)-1)='' then
+          Komp.INN:=0
+        else
+          Komp.INN:=StrToInt64(Copy(HTMLdataVAR,1,pos('</div>',HTMLdataVAR)-1));
+      HTMLdataVAR:= Copy(HTMLdataVAR,pos('</li>',HTMLdataVAR)+5,length(HTMLdataVAR));
+    end
+  else
+    begin
+      Status:=false;
+    end;
+
+end;
+
+//------------------------------------------------
+
+//Процедура Парсинга------------------------------
+procedure ParsingData;
+begin
+  kompaniya.Name_long := SearchNameFull(HTMLdata);
+  kompaniya.Name:=SearchName(HTMLdata);
+  kompaniya.OGRN:= SearchOGRN(HTMLdata);
+  kompaniya.OKPO:= SearchOKPO(HTMLdata);
+  kompaniya.KPP:= SearchKPP(HTMLdata);
+  kompaniya.INN:= SearchINN(HTMLdata);
+  kompaniya.ADRESS:= SearchAddress(HTMLdata);
+  kompaniya.NumberOfEmployees:= SearchEmployees(HTMLdata);
+end;
+//------------------------------------------------
+
+//Процедура Парсинга по улице---------------------
+procedure ParsingStreetData(var IdHTTP1:TIdHTTP; strStreet:string);
+var HTMLdataVAR:string;
+    Status:boolean;
+    Marker,page:integer;
+begin
+  all_S:=SearchAmountOperatingKompany(HTMLdata);
+  HTMLdataVAR:=FindListKompany(HTMLdata);
+  SetLength(SpisokKomp, all_S+1);
+
+  Status:=true;
+  Marker:=0;
+  page:=1;
+  while Marker <  all_S do
+    begin
+      if Marker<>0 then
+        begin
+         inc(page);
+         strStreet:=StrSearchStreet1+'page='+IntToStr(page)+'&'+StrSearchStreet2+strStreet;
+         HTMLdataVAR :=(IdHTTP1.Get(strStreet));
+         //ShowMessage('Считал '+IntToStr(page)+' страницу');
+         HTMLdataVAR:=FindListKompany(HTMLdataVAR);
+        end;
+      while Status do
+        begin
+         inc(Marker);
+         PullOutCompanyData(HTMLdataVAR,Status,Marker,SpisokKomp[Marker]);
+        end;
+       Status:=true;
+       dec(Marker);
+     end;
+  ShowMessage('Считал '+IntToStr(Marker)+' компаний');
+ // FillingKompany(all_S);
+
+end;
+//------------------------------------------------
+
+//Процедура Парсинга------------------------------
+procedure GetDataForINN(var kompaniya:Company; var IdHTTP1:TIdHTTP);
+var HTMLdata:string;
+begin
+  HTMLdata :=(IdHTTP1.Get(StrRUSS+kompaniya.id_));
+  kompaniya.Name_long := SearchNameFull(HTMLdata);
+  kompaniya.Name:=SearchName(HTMLdata);
+  if length(kompaniya.Name)>30 then
+    begin
+
+    end;
+  kompaniya.OGRN:= SearchOGRN(HTMLdata);
+  kompaniya.OKPO:= SearchOKPO(HTMLdata);
+  kompaniya.KPP:= SearchKPP(HTMLdata);
+  kompaniya.INN:= SearchINN(HTMLdata);
+  kompaniya.ADRESS:= SearchAddress(HTMLdata);
+  kompaniya.NumberOfEmployees:= SearchEmployees(HTMLdata);
+end;
+//------------------------------------------------
+
+
+procedure TForm1.Button1Click(Sender: TObject);
+begin
+  strINN:=StrSearchRUSS+INN.Text;
+  HTMLdata :=(IdHTTP1.Get(strINN));
+  ParsingData;
+
+  Memo1.Text:=kompaniya.Name_long;
+  Memo1.Text:=Memo1.Text+ #13+#10 + kompaniya.Name;
+  Memo1.Text:=Memo1.Text+ #13+#10+'ОГРН: ' + IntToStr(kompaniya.OGRN);
+  Memo1.Text:=Memo1.Text+ #13+#10+'ОКПО: ' + IntToStr(kompaniya.OKPO);
+  Memo1.Text:=Memo1.Text+ #13+#10+'КПП: ' + IntToStr(kompaniya.KPP);
+  Memo1.Text:=Memo1.Text+ #13+#10+'ИНН: ' + IntToStr(kompaniya.INN);
+  Memo1.Text:=Memo1.Text+ #13+#10+'Индекс: ' + IntToStr(kompaniya.ADRESS.Index);
+  Memo1.Text:=Memo1.Text+ #13+#10+'Регион: ' + kompaniya.ADRESS.Region;
+  Memo1.Text:=Memo1.Text+ #13+#10+'Наличие города: ' + BoolToStr(kompaniya.ADRESS.StatCity);
+  Memo1.Text:=Memo1.Text+ #13+#10+'Город: ' + kompaniya.ADRESS.City;
+  Memo1.Text:=Memo1.Text+ #13+#10+'Улица, дом: ' + kompaniya.ADRESS.Street;
+  Memo1.Text:=Memo1.Text+ #13+#10+'Количество сотрудников: ' + IntToStr(kompaniya.NumberOfEmployees.Employee);
+
+end;
+
+
+
+procedure TForm1.Button2Click(Sender: TObject);
+begin
+  ExcelOpenFile('\kompany.xlsx');
+end;
+
+
+
+procedure TForm1.Button3Click(Sender: TObject);
+begin
+  StopExcel;
+end;
+
+procedure TForm1.Button4Click(Sender: TObject);
+begin
+  //raise Exception.Create(booltostr(WriteDataToExcel('1')));
+  //ShowMessage(booltostr(WriteDataToExcel(inttostr(1),1,3)));
+
+     WriteDataToExcel(inttostr(kompaniya.INN),i,5);
+     WriteDataToExcel(inttostr(kompaniya.KPP),i,6);
+     WriteDataToExcel(inttostr(kompaniya.OGRN),i,7);
+     WriteDataToExcel('ОПП '+kompaniya.Name,i,2);
+     WriteDataToExcel(kompaniya.Name_long,i,4);
+     WriteDataToExcel(kompaniya.ADRESS.Street,i,11);
+     inc(i);
+end;
+
+
+
+procedure TForm1.INNKeyPress(Sender: TObject; var Key: Char);
+begin
+  if Key = #13 then
+    begin
+      strINN:=StrSearchRUSS+INN.Text;
+      HTMLdata :=(IdHTTP1.Get(strINN));
+      ParsingData;
+
+      Memo1.Text:=kompaniya.Name_long;
+      Memo1.Text:=Memo1.Text+ #13+#10 + kompaniya.Name;
+      Memo1.Text:=Memo1.Text+ #13+#10+'ОГРН: ' + IntToStr(kompaniya.OGRN);
+      Memo1.Text:=Memo1.Text+ #13+#10+'ОКПО: ' + IntToStr(kompaniya.OKPO);
+      Memo1.Text:=Memo1.Text+ #13+#10+'КПП: ' + IntToStr(kompaniya.KPP);
+      Memo1.Text:=Memo1.Text+ #13+#10+'ИНН: ' + IntToStr(kompaniya.INN);
+      Memo1.Text:=Memo1.Text+ #13+#10+'Индекс: ' + IntToStr(kompaniya.ADRESS.Index);
+      Memo1.Text:=Memo1.Text+ #13+#10+'Регион: ' + kompaniya.ADRESS.Region;
+      Memo1.Text:=Memo1.Text+ #13+#10+'Наличие города: ' + BoolToStr(kompaniya.ADRESS.StatCity);
+      Memo1.Text:=Memo1.Text+ #13+#10+'Город: ' + kompaniya.ADRESS.City;
+      Memo1.Text:=Memo1.Text+ #13+#10+'Улица, дом: ' + kompaniya.ADRESS.Street;
+      Memo1.Text:=Memo1.Text+ #13+#10+'Количество сотрудников: ' + IntToStr(kompaniya.NumberOfEmployees.Employee);
+
+      //Ген дир!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    end;
+end;
+
+procedure TForm1.StreetKeyPress(Sender: TObject; var Key: Char);
+begin
+  if Key = #13 then
+    begin
+      strStreet:=StrSearchStreet1+StrSearchStreet2+TNetEncoding.Url.Encode(Street.Text);
+      HTMLdata :=(IdHTTP1.Get(strStreet));
+      //ShowMessage('Считал первую страницу');
+      ParsingStreetData(IdHTTP1,TNetEncoding.Url.Encode(Street.Text));
+
+
+      for i := 1 to length(SpisokKomp)-1 do
+        begin
+          GetDataForINN(SpisokKomp[i], IdHTTP1);
+
+          WriteDataToExcel(inttostr(SpisokKomp[i].INN),i+1,5);
+          WriteDataToExcel(inttostr(SpisokKomp[i].KPP),i+1,6);
+          WriteDataToExcel(inttostr(SpisokKomp[i].OGRN),i+1,7);
+          WriteDataToExcel('ОПП '+SpisokKomp[i].Name,i+1,2);
+          WriteDataToExcel(SpisokKomp[i].Name_long,i+1,4);
+          WriteDataToExcel(SpisokKomp[i].ADRESS.Street,i+1,11);
+
+        end;
+    //  strStreet:=StrSearchStreet1+'page='+IntToStr(2)+'&'+StrSearchStreet2+TNetEncoding.Url.Encode(Street.Text);
+      Memo1.Text:=SpisokKomp[0].id_;
+      Memo1.Text:=Memo1.Text+ #13+#10 + IntToStr(SpisokKomp[0].INN);
+      Memo1.Text:=Memo1.Text+ #13+#10 + IntToStr(SpisokKomp[0].OGRN);
+     //   Memo1.Text:=strStreet;
+    end;
+end;
+
+end.

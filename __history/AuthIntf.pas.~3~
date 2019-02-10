@@ -1,0 +1,26 @@
+unit AuthIntf;
+
+interface
+
+uses Soap.InvokeRegistry, System.Types, Soap.XSBuiltIns;
+
+type
+
+  TUserCredentials = class(TRemotable)
+  published
+    property UserName: string;
+    property Password: string;
+  end;
+
+  IAuth = interface(IInvokable)
+  ['{3898F485-67A6-4F94-B44B-52F255F30ACB}']
+    function Auth(const Value: TUserCredentials): Boolean; stdcall;
+
+  end;
+
+implementation
+
+initialization
+  InvRegistry.RegisterInterface(TypeInfo(IAuth));
+
+end.

@@ -1,0 +1,35 @@
+unit AuthIntf;
+
+interface
+
+uses Soap.InvokeRegistry, System.Types, Soap.XSBuiltIns;
+
+type
+
+  TEnumTest = (etNone, etAFew, etSome, etAlot);
+
+  TDoubleArray = array of Double;
+
+  TMyEmployee = class(TRemotable)
+  private
+    FLastName: UnicodeString;
+    FFirstName: UnicodeString;
+    FSalary: Double;
+  published
+    property LastName: UnicodeString read FLastName write FLastName;
+    property FirstName: UnicodeString read FFirstName write FFirstName;
+    property Salary: Double read FSalary write FSalary;
+  end;
+
+  IAuth = interface(IInvokable)
+  ['{3898F485-67A6-4F94-B44B-52F255F30ACB}']
+    function Auth(const Value: TUserCredentials): Boolean; stdcall;
+
+  end;
+
+implementation
+
+initialization
+  InvRegistry.RegisterInterface(TypeInfo(IAuth));
+
+end.

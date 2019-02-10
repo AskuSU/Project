@@ -1,0 +1,15 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<BorlandProject>
+  <Transactions>
+    <Transaction>2019.02.06 17:02:22.770,=D:\Андрей\Документы\Embarcadero\Studio\Projects\WebModuleUnit1.pas</Transaction>
+    <Transaction>2019.02.06 17:02:22.991,=D:\Андрей\Документы\Embarcadero\Studio\Projects\ServerConst1.pas</Transaction>
+    <Transaction>2019.02.06 17:02:50.864,=D:\Андрей\Документы\Embarcadero\Studio\Projects\AuthImpl.pas</Transaction>
+    <Transaction>2019.02.06 17:02:50.928,=D:\Андрей\Документы\Embarcadero\Studio\Projects\AuthIntf.pas</Transaction>
+    <Transaction>2019.02.06 17:04:27.868,C:\Users\АндрейACER\OneDrive\Project\AuthIntf.pas=D:\Андрей\Документы\Embarcadero\Studio\Projects\AuthIntf.pas</Transaction>
+    <Transaction>2019.02.06 17:04:31.256,C:\Users\АндрейACER\OneDrive\Project\AuthImpl.pas=D:\Андрей\Документы\Embarcadero\Studio\Projects\AuthImpl.pas</Transaction>
+    <Transaction>2019.02.06 17:04:34.976,C:\Users\АндрейACER\OneDrive\Project\ServerConst1.pas=D:\Андрей\Документы\Embarcadero\Studio\Projects\ServerConst1.pas</Transaction>
+    <Transaction>2019.02.06 17:04:37.414,C:\Users\АндрейACER\OneDrive\Project\WebModuleUnit1.pas=D:\Андрей\Документы\Embarcadero\Studio\Projects\WebModuleUnit1.pas</Transaction>
+    <Transaction>2019.02.06 17:04:37.414,C:\Users\АндрейACER\OneDrive\Project\WebModuleUnit1.dfm=D:\Андрей\Документы\Embarcadero\Studio\Projects\WebModuleUnit1.dfm</Transaction>
+    <Transaction>2019.02.06 17:04:39.978,C:\Users\АндрейACER\OneDrive\Project\Project2.dproj=D:\Андрей\Документы\Embarcadero\Studio\Projects\Project2.dproj</Transaction>
+  </Transactions>
+</BorlandProject>

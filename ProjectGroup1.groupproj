@@ -1,0 +1,36 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{AC2D4614-84FF-42B4-A80A-5A76AA842FF5}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="SOA\SoapServerSA\SoapServerSA.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="SoapServerSA">
+        <MSBuild Projects="SOA\SoapServerSA\SoapServerSA.dproj"/>
+    </Target>
+    <Target Name="SoapServerSA:Clean">
+        <MSBuild Projects="SOA\SoapServerSA\SoapServerSA.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="SoapServerSA:Make">
+        <MSBuild Projects="SOA\SoapServerSA\SoapServerSA.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="SoapServerSA"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="SoapServerSA:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="SoapServerSA:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>
